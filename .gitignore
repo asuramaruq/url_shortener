@@ -1,0 +1,34 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build output
+/bin/
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+
+# Dependency directory
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# SQLite database
+storage/*.db
+
+# OS files
+.DS_Store
+Thumbs.db
