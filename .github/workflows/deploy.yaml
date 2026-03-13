@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest # ОС для runner
     env: # Вводим переменные, которые будем использовать далее
-      HOST: ubuntu@92.5.1.73
+      HOST: ubuntu@152.70.20.64
       DEPLOY_DIRECTORY: /home/ubuntu/apps/url-shortener
       CONFIG_PATH: /home/ubuntu/apps/url-shortener/config/prod.yaml
       ENV_FILE_PATH: /home/ubuntu/apps/url-shortener/config.env
