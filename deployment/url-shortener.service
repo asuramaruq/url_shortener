@@ -1,0 +1,17 @@
+# deployment/url-shortener.service
+
+[Unit]
+Description=Url Shortener
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/apps/url-shortener
+ExecStart=/home/ubuntu/apps/url-shortener/url-shortener
+Restart=always
+RestartSec=4
+StandardOutput=inherit
+EnvironmentFile=/home/ubuntu/apps/url-shortener/config.env
+
+[Install]
+WantedBy=multi-user.target

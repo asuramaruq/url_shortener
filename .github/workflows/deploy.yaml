@@ -1,0 +1,72 @@
+# .github/workflows/deploy.yaml
+
+name: Deploy App # Даем осмысленное имя
+
+on:
+  workflow_dispatch: # Ручкой запуск
+    inputs: # Что нужно ввести вручную при запуске
+      tag: # Мы будем указывать тег для деплоя
+        description: 'Tag to deploy'
+        required: true
+
+# .github/workflows/deploy.yaml
+
+# name: ..., on: ...
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest # ОС для runner
+    env: # Вводим переменные, которые будем использовать далее
+      HOST: ubuntu@92.5.1.73 # логин / хост сервера, на которые деплоим
+      DEPLOY_DIRECTORY: /ubuntu/apps/url-shortener # папка проекта на сервере
+      CONFIG_PATH: /ubuntu/apps/url-shortener/config/prod.yaml # конфиг сервиса на сервере
+      ENV_FILE_PATH: /ubuntu/apps/url-shortener/config.env # env-файл на сервере
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.tag }}
+      - name: Check if tag exists
+        run: |
+          git fetch --all --tags
+          if ! git tag | grep -q "^${{ github.event.inputs.tag }}$"; then
+            echo "error: Tag '${{ github.event.inputs.tag }}' not found"
+            exit 1
+          fi
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.25.4
+      - name: Build app
+        run: |
+          go mod download
+          GOOS=linux GOARCH=amd64 go build -o url-shortener ./cmd/url-shortener
+      - name: Deploy to VM
+        run: |
+          sudo apt-get install -y ssh rsync
+          echo "$DEPLOY_SSH_KEY" > deploy_key.pem
+          chmod 600 deploy_key.pem
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "mkdir -p ${{ env.DEPLOY_DIRECTORY }}"
+          rsync -avz -e 'ssh -i deploy_key.pem -o StrictHostKeyChecking=no' --exclude='.git' ./ ${{ env.HOST }}:${{ env.DEPLOY_DIRECTORY }}
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Remove old systemd service file
+        run: |
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "rm -f /etc/systemd/system/url-shortener.service"
+      - name: List workspace contents
+        run: |
+          echo "Listing deployment folder contents:"
+          ls -la ${{ github.workspace }}/deployment
+      - name: Create environment file on server
+        run: |
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "touch ${{ env.ENV_FILE_PATH }}"
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "chmod 600 ${{ env.ENV_FILE_PATH }}"
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "echo 'CONFIG_PATH=${{ env.CONFIG_PATH }}' > ${{ env.ENV_FILE_PATH }}"
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "echo 'HTTP_SERVER_PASSWORD=${{ secrets.AUTH_PASS }}' >> ${{ env.ENV_FILE_PATH }}"
+      - name: Copy systemd service file
+        run: |
+          scp -i deploy_key.pem -o StrictHostKeyChecking=no ${{ github.workspace }}/deployment/url-shortener.service ${{ env.HOST }}:/tmp/url-shortener.service
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "sudo mv /tmp/url-shortener.service /etc/systemd/system/url-shortener.service"
+      - name: Start application
+        run: |
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "sudo systemctl daemon-reload && sudo systemctl enable url-shortener.service && sudo systemctl restart url-shortener.service"
